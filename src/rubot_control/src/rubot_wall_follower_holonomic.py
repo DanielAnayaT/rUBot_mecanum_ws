@@ -15,15 +15,20 @@ class WallFollower:
         self.rate = rospy.Rate(25)
 
         self.d = rospy.get_param("~distance_laser", 0.3)
-        self.vx = rospy.get_param("~forward_speed", 0.2)
-        self.vy = rospy.get_param("~lateral_speed", 0.2)
-        self.wz = rospy.get_param("~rotation_speed", 1.0)
         self.vf = rospy.get_param("~speed_factor", 1.0)
+        self.vx = rospy.get_param("~forward_speed", 0.2) * self.vf
+        self.vy = rospy.get_param("~lateral_speed", 0.2) * self.vf
+        self.wz = rospy.get_param("~rotation_speed", 1.0) * self.vf
 
         self.isScanRangesLengthCorrectionFactorCalculated = False
         self.scanRangesLengthCorrectionFactor = 2
 
         self.shutting_down = False
+
+    def get_distance(self, msg, minAngle, maxAngle):
+        minAngle = int(minAngle * self.scanRangesLengthCorrectionFactor)
+        maxAngle = int(maxAngle * self.scanRangesLengthCorrectionFactor)
+        return min(min(msg.ranges[minAngle:maxAngle]), 3)
 
     def scan_callback(self, msg):
         if self.shutting_down:
@@ -33,20 +38,16 @@ class WallFollower:
             self.scanRangesLengthCorrectionFactor = len(msg.ranges) / 360
             self.isScanRangesLengthCorrectionFactorCalculated = True
 
-        bright_min = int(30 * self.scanRangesLengthCorrectionFactor)
-        bright_max = int(90 * self.scanRangesLengthCorrectionFactor)
-        right_min = int(90 * self.scanRangesLengthCorrectionFactor)
-        right_max = int(120 * self.scanRangesLengthCorrectionFactor)
-        fright_min = int(120 * self.scanRangesLengthCorrectionFactor)
-        fright_max = int(170 * self.scanRangesLengthCorrectionFactor)
-        front_min = int(170 * self.scanRangesLengthCorrectionFactor)
-        front_max = int(190 * self.scanRangesLengthCorrectionFactor)
-
         regions = {
-            'bright': min(min(msg.ranges[bright_min:bright_max]), 3),
-            'right': min(min(msg.ranges[right_min:right_max]), 3),
-            'fright': min(min(msg.ranges[fright_min:fright_max]), 3),
-            'front': min(min(msg.ranges[front_min:front_max]), 3),
+            'rback': self.get_distance(msg, 0, 30),
+            'bright': self.get_distance(msg, 30, 90),
+            'right': self.get_distance(msg, 90, 120),
+            'fright': self.get_distance(msg, 120, 170),
+            'front': self.get_distance(msg, 170, 190),
+            'fleft': self.get_distance(msg, 190, 240),
+            'left': self.get_distance(msg, 240, 270),
+            'bleft': self.get_distance(msg, 270, 330),
+            'lback': self.get_distance(msg, 330, 360),
         }
 
         self.take_action(regions)
