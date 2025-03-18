@@ -14,10 +14,11 @@ class WallFollower:
         rospy.on_shutdown(self.shutdown_callback)
         self.rate = rospy.Rate(25)
 
-        self.d = rospy.get_param("~distance_laser", 0.3)  # Default value added
-        self.vx = rospy.get_param("~forward_speed", 0.2)  # Default value added
-        self.wz = rospy.get_param("~rotation_speed", 1.0)  # Default value added
-        self.vf = rospy.get_param("~speed_factor", 1.0)  # Default value added
+        self.d = rospy.get_param("~distance_laser", 0.3)
+        self.vx = rospy.get_param("~forward_speed", 0.2)
+        self.vy = rospy.get_param("~lateral_speed", 0.2)
+        self.wz = rospy.get_param("~rotation_speed", 1.0)
+        self.vf = rospy.get_param("~speed_factor", 1.0)
 
         self.isScanRangesLengthCorrectionFactorCalculated = False
         self.scanRangesLengthCorrectionFactor = 2
@@ -53,6 +54,7 @@ class WallFollower:
     def take_action(self, regions):
         msg = Twist()
         linear_x = 0
+        linear_y = 0
         angular_z = 0
 
         state_description = ''
@@ -60,30 +62,37 @@ class WallFollower:
         if regions['front'] > self.d and regions['fright'] > 2 * self.d and regions['right'] > 2 * self.d and regions['bright'] > 2 * self.d:
             state_description = 'case 1 - starting'
             linear_x = self.vx
+            linear_y = 0
             angular_z = 0
         elif regions['front'] < self.d:
             state_description = 'case 2 - front'
             linear_x = 0
+            linear_y = 0
             angular_z = self.wz
         elif regions['fright'] < self.d and regions['right'] > self.d:
             state_description = 'case 3 - fright'
             linear_x = 0
+            linear_y = 0
             angular_z = self.wz
-        elif regions['right'] < (self.d+0.1):# and regions['bright'] > self.d:
+        elif regions['right'] < (self.d + 0.1): # and regions['bright'] > self.d:
             state_description = 'case 4 - right'
             linear_x = self.vx
+            linear_y = 0
             angular_z = 0
         elif regions['bright'] < self.d:
             state_description = 'case 5 - bright'
             linear_x = 0
-            angular_z = -2*self.wz
+            linear_y = 0
+            angular_z = -2 * self.wz
         else:
             state_description = 'case 6 - Far'
-            linear_x = self.vx/2
-            angular_z = -2*self.wz
+            linear_x = self.vx / 2
+            linear_y = 0
+            angular_z = -2 * self.wz
 
         rospy.loginfo(state_description)
         msg.linear.x = linear_x
+        msg.linear.y = linear_y
         msg.angular.z = angular_z
         self.pub.publish(msg)
         self.rate.sleep()
