@@ -48,7 +48,7 @@ class rUBot:
         # To wrapp the angle to the ranege [+180, -180]
         angleClosestDistance = (angleClosestDistance + 180) % 360 - 180
         #rospy.loginfo(f"Angle Closest Distance (wrapped): {angleClosestDistance:.2f} degrees")
-        rospy.loginfo(f"Closest distance: {closestDistance:.2f} meters and Angle: {angleClosestDistance:.1f} degrees")
+        #rospy.loginfo(f"Closest distance: {closestDistance:.2f} meters and Angle: {angleClosestDistance:.1f} degrees")
 
         if closestDistance < self._distanceLaser and -80 < angleClosestDistance < 80:
             self._msg.linear.x = self._backwardSpeed * self._speedFactor
