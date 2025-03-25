@@ -5,6 +5,7 @@ import numpy as np
 from sensor_msgs.msg import LaserScan
 from geometry_msgs.msg import Twist
 
+
 class SimpleNavigator:
     def __init__(self):
         rospy.init_node("simple_nav")
@@ -19,24 +20,46 @@ class SimpleNavigator:
         self.cmd_vel_pub = rospy.Publisher("/cmd_vel", Twist, queue_size=10)
 
         # Suscriptor al sensor LIDAR
-        rospy.Subscriber("/scan", LaserScan, self.laser_callback, queue_size=10)
+        self.sub = rospy.Subscriber("/scan", LaserScan, self.laser_callback)
+
+        rospy.on_shutdown(self.shutdown_callback)
+
+        self.isScanRangesLengthCorrectionFactorCalculated = False
+        self.scanRangesLengthCorrectionFactor = 2
 
         self.closest_front = float("inf")
         self.closest_back = float("inf")
         self.rate = rospy.Rate(10)  # 10 Hz
 
-    def laser_callback(self, scan):
-        ranges = np.array(scan.ranges)
-        ranges[np.isinf(ranges)] = 999  # Reemplazar valores infinitos por un número alto
-        
-        # Dividir el escaneo en sectores:
-        # Frente = ±30º del eje delantero
-        # Parte trasera = ±30º del eje trasero (180º)
-        front_angles = np.concatenate((ranges[:30], ranges[-30:]))   # 30º a la izquierda y derecha del frente
-        back_angles = ranges[150:210]  # 30º a la izquierda y derecha de 180º (parte trasera)
+        self.shutting_down = False
 
-        self.closest_front = np.min(front_angles)
-        self.closest_back = np.min(back_angles)
+    def get_distance(self, msg, minAngle, maxAngle):
+        minAngle = int(minAngle * self.scanRangesLengthCorrectionFactor)
+        maxAngle = int(maxAngle * self.scanRangesLengthCorrectionFactor)
+        return min(min(msg.ranges[minAngle:maxAngle]), 3)
+
+    def laser_callback(self, msg):
+        if self.shutting_down:
+            return
+
+        if not self.isScanRangesLengthCorrectionFactorCalculated:
+            self.scanRangesLengthCorrectionFactor = len(msg.ranges) / 360
+            self.isScanRangesLengthCorrectionFactorCalculated = True
+
+        regions = {
+            'rback': self.get_distance(msg, 0, 30),
+            'bright': self.get_distance(msg, 30, 90),
+            'right': self.get_distance(msg, 90, 120),
+            'fright': self.get_distance(msg, 120, 170),
+            'front': self.get_distance(msg, 170, 190),
+            'fleft': self.get_distance(msg, 190, 240),
+            'left': self.get_distance(msg, 240, 270),
+            'bleft': self.get_distance(msg, 270, 330),
+            'lback': self.get_distance(msg, 330, 360),
+        }
+
+        self.closest_front = regions["front"]
+        self.closest_back = min(regions["rback"], regions["lback"])
 
     def run(self):
         msg = Twist()
@@ -58,6 +81,21 @@ class SimpleNavigator:
             self.cmd_vel_pub.publish(msg)
             self.rate.sleep()
 
+    def shutdown_callback(self):
+        self.shutting_down = True
+        self.sub.unregister()
+        msg = Twist()
+        msg.linear.x = 0
+        msg.linear.y = 0
+        msg.angular.z = 0
+        self.cmd_vel_pub.publish(msg)
+        self.rate.sleep()
+        rospy.loginfo("Stop rUBot")
+
+
 if __name__ == "__main__":
     node = SimpleNavigator()
-    node.run()
+    try:
+        node.run()
+    except rospy.ROSInterruptException:
+        pass

@@ -5,9 +5,6 @@
     <arg name="forward_speed" default="0.2" />
     <arg name="backward_speed" default="-0.2" />
     <arg name="rotation_speed" default="0.3" />
-    
-    <!-- Solo tiempo de giro -->
-    <arg name="max_escape_time" default="1.5" />
 
   <node name="rubot_nav" pkg="rubot_control" type="rubot_self_control2.py" output="screen">
         <param name="distance_laser" value="$(arg safe_distance)"/>
@@ -15,6 +12,5 @@
         <param name="forward_speed" value="$(arg forward_speed)"/>
         <param name="backward_speed" value="$(arg backward_speed)"/>
         <param name="rotation_speed" value="$(arg rotation_speed)"/>
-        <param name="max_escape_time" value="$(arg max_escape_time)"/>
   </node>
 </launch>
