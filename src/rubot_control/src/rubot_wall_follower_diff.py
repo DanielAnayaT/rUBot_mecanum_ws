@@ -23,6 +23,7 @@ class WallFollower:
         self.scanRangesLengthCorrectionFactor = 2
 
         self.shutting_down = False
+        self.regions = None
 
     def get_distance(self, msg, minAngle, maxAngle):
         minAngle = int(minAngle * self.scanRangesLengthCorrectionFactor)
@@ -37,7 +38,7 @@ class WallFollower:
             self.scanRangesLengthCorrectionFactor = len(msg.ranges) / 360
             self.isScanRangesLengthCorrectionFactorCalculated = True
 
-        regions = {
+        self.regions = {
             'rback': self.get_distance(msg, 0, 30),
             'bright': self.get_distance(msg, 30, 90),
             'right': self.get_distance(msg, 90, 120),
@@ -49,7 +50,10 @@ class WallFollower:
             'lback': self.get_distance(msg, 330, 360),
         }
 
-        self.take_action(regions)
+    def run(self):
+        while not rospy.is_shutdown():
+            if self.regions:
+                self.take_action(self.regions)
 
     def take_action(self, regions):
         msg = Twist()
@@ -103,6 +107,6 @@ class WallFollower:
 if __name__ == '__main__':
     try:
         wall_follower = WallFollower()
-        rospy.spin()
+        wall_follower.run()
     except rospy.ROSInterruptException:
         pass
