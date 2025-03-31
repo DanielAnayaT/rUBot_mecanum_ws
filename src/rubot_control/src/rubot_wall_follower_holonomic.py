@@ -1,140 +1,133 @@
-#! /usr/bin/env python3
+#!/usr/bin/env python3
+
 import rospy
 from sensor_msgs.msg import LaserScan
 from geometry_msgs.msg import Twist
-import time
+from numpy import sign
 
-pub = None
-d = 0
-vx = 0
-wz = 0
-vf = 0
+class WallFollower:
+    def __init__(self):
+        rospy.init_node('wall_follower', anonymous=False)
 
-isScanRangesLengthCorrectionFactorCalculated = False
-scanRangesLengthCorrectionFactor = 2
+        self.pub = rospy.Publisher('/cmd_vel', Twist, queue_size=10)
+        self.sub = rospy.Subscriber('/scan', LaserScan, self.scan_callback)
+        rospy.on_shutdown(self.shutdown_callback)
+        self.rate = rospy.Rate(25)
 
+        self.d = rospy.get_param("~distance_laser", 0.3)
+        self.vf = rospy.get_param("~speed_factor", 1.0)
+        self.vx = rospy.get_param("~forward_speed", 0.2) * self.vf
+        self.vy = rospy.get_param("~lateral_speed", 0.2) * self.vf
+        self.wz = rospy.get_param("~rotation_speed", 1.0) * self.vf
 
-def clbk_laser(msg):
-    global isScanRangesLengthCorrectionFactorCalculated
-    global scanRangesLengthCorrectionFactor
-    
-    if not isScanRangesLengthCorrectionFactorCalculated:
-        scanRangesLengthCorrectionFactor = len(msg.ranges) / 360
-        isScanRangesLengthCorrectionFactorCalculated = True
+        self.isScanRangesLengthCorrectionFactorCalculated = False
+        self.scanRangesLengthCorrectionFactor = 2
 
-    # Define los nuevos rangos para left, fleft, bleft, ajustando los ángulos según sea necesario
-    fleft_min = int(190 * scanRangesLengthCorrectionFactor)
-    fleft_max = int(210 * scanRangesLengthCorrectionFactor)
-    left_min = int(250 * scanRangesLengthCorrectionFactor)
-    left_max = int(270 * scanRangesLengthCorrectionFactor)
-    # Continúa con las definiciones anteriores
-    bright_min = int(30 * scanRangesLengthCorrectionFactor)
-    bright_max = int(90 * scanRangesLengthCorrectionFactor)
-    right_min = int(90 * scanRangesLengthCorrectionFactor)
-    right_max = int(120 * scanRangesLengthCorrectionFactor)
-    fright_min = int(120 * scanRangesLengthCorrectionFactor)
-    fright_max = int(170 * scanRangesLengthCorrectionFactor)
-    front_min= int(170 * scanRangesLengthCorrectionFactor)
-    front_max = int(190 * scanRangesLengthCorrectionFactor)
+        self.shutting_down = False
+        self.regions = None
 
-    regions = {
-        'fleft': min(min(msg.ranges[fleft_min:fleft_max]), 3),
-        'left': min(min(msg.ranges[left_min:left_max]), 3),
-        'bright':  min(min(msg.ranges[bright_min:bright_max]), 3),
-        'right':  min(min(msg.ranges[right_min:right_max]), 3),
-        'fright': min(min(msg.ranges[fright_min:fright_max]), 3),
-        'front':  min(min(msg.ranges[front_min:front_max]), 3),
-    }
+    def get_distance(self, msg, minAngle, maxAngle):
+        minAngle = int(minAngle * self.scanRangesLengthCorrectionFactor)
+        maxAngle = int(maxAngle * self.scanRangesLengthCorrectionFactor)
+        return min(min(msg.ranges[minAngle:maxAngle]), 3)
 
-    take_action(regions)
+    def scan_callback(self, msg):
+        if self.shutting_down:
+            return
 
+        if not self.isScanRangesLengthCorrectionFactorCalculated:
+            self.scanRangesLengthCorrectionFactor = len(msg.ranges) / 360
+            self.isScanRangesLengthCorrectionFactorCalculated = True
 
-def take_action(regions):
-    msg = Twist()
-    linear_x = 0
-    angular_z = 0
-    linear_y = 0
+        self.regions = {
+            'rback': self.get_distance(msg, 0, 30),
+            'bright': self.get_distance(msg, 30, 90),
+            'right': self.get_distance(msg, 90, 120),
+            'fright': self.get_distance(msg, 120, 170),
+            'front': self.get_distance(msg, 170, 190),
+            'fleft': self.get_distance(msg, 190, 240),
+            'left': self.get_distance(msg, 240, 270),
+            'bleft': self.get_distance(msg, 270, 330),
+            'lback': self.get_distance(msg, 330, 360),
+        }
 
-    state_description = ''
+        self.regions["back"] = min(self.regions["rback"], self.regions["lback"])
 
-    if regions['front'] > d and all(regions[direction] > 2*d for direction in ['fright', 'right', 'bright', 'fleft', 'left']):
-        state_description = 'case 1 - nothing'
-        linear_x = vx
-        angular_z = 0
-    elif regions['front'] < d:
-        state_description = 'case 2 - front'
+    def run(self):
+        while not rospy.is_shutdown():
+            if self.regions:
+                self.take_action(self.regions)
+
+    def take_action(self, regions):
+        msg = Twist()
         linear_x = 0
-        linear_y=vx
-        angular_z = wz/2 # turn left
-    elif regions['fright'] < d:
-        state_description = 'case 3 - fright'
-        linear_x = vx # turn left slow
-        linear_y = vx/2
-        angular_z = wz
-    elif regions['front'] > d and regions['right'] < d:
-        state_description = 'case 4 - right'
-        linear_x = vx # straight
         linear_y = 0
-        angular_z = -wz/2
-    elif regions['bright'] < d:
-        state_description = 'case 5 - bright'
-        linear_x = vx/4 # turn right (return to wall)
-        angular_z = -wz/2
-        linear_y = -vx/2
-    elif regions['fleft'] < d:
-        state_description = 'case 7 - fleft'
-        linear_x = -vx/2  
-        angular_z = -wz/2  
-        linear_y = -vx/2
-    elif regions['left'] < d:
-        state_description = 'case 8 - left'
-        linear_x = vx/3
-        linear_y = -vx/3
-        angular_z = wz*1.5
-    else:
-        state_description = 'case 6 - Far'
-        linear_x = vx/2 # turn right more
-        angular_z = -wz/2
-        linear_y = 0
+        angular_z = 0
 
-    rospy.loginfo(state_description)
-    msg.linear.x = linear_x * vf
-    msg.angular.z = angular_z * vf
-    msg.linear.y = linear_y * vf
-    pub.publish(msg)
-    rate.sleep()
+        state_description = ''
 
-def shutdown():
-    msg = Twist()
-    msg.linear.x = 0
-    msg.linear.y = 0
-    msg.angular.z = 0
-    pub.publish(msg)
-    rospy.loginfo("Stop rUBot")
+        if regions['front'] > self.d and regions['fright'] > 2 * self.d and regions['right'] > 2 * self.d and regions['bright'] > 2 * self.d:
+            state_description = 'starting'
+            linear_x = self.vx
+            angular_z = 0
 
-def main():
-    global pub
-    global sub
-    global rate
-    global d
-    global vx
-    global wz
-    global vf
+        elif regions['front'] < self.d and regions['left'] > self.d:
+            state_description = 'front - move sideways'
+            linear_y = self.vy
 
-    rospy.init_node('wall_follower')
-    pub = rospy.Publisher('/cmd_vel', Twist, queue_size=10)
-    sub = rospy.Subscriber('/scan', LaserScan, clbk_laser)
-    rospy.on_shutdown(shutdown)
-    rate = rospy.Rate(25)
+        elif regions['back'] < self.d and regions['right'] > self.d:
+            state_description = 'back - move sideways'
+            linear_y = -self.vy
 
-    d= rospy.get_param("~distance_laser")
-    vx= rospy.get_param("~forward_speed")
-    wz= rospy.get_param("~rotation_speed")
-    vf= rospy.get_param("~speed_factor")
+        elif regions['front'] < self.d:
+            state_description = 'front'
+            linear_x = 0
+            linear_y = 0
+            angular_z = self.wz
+
+        elif regions['fright'] < self.d and regions['right'] > self.d:
+            state_description = 'fright'
+            linear_x = 0
+            angular_z = self.wz
+
+        elif regions['right'] < (self.d + 0.1):  # and regions['bright'] > self.d:
+            state_description = 'right'
+            linear_x = self.vx
+            linear_y = 0
+            angular_z = 0
+
+        elif regions['bright'] < self.d:
+            state_description = 'bright'
+            linear_x = 0
+            angular_z = -2 * self.wz
+
+        else:
+            state_description = 'Far'
+            linear_x = self.vx / 2
+            linear_y = 0
+            angular_z = -2 * self.wz
+
+        rospy.loginfo(state_description)
+        msg.linear.x = linear_x
+        msg.linear.y = linear_y
+        msg.angular.z = angular_z
+        self.pub.publish(msg)
+        self.rate.sleep()
+
+    def shutdown_callback(self):
+        self.shutting_down = True
+        self.sub.unregister()
+        msg = Twist()
+        msg.linear.x = 0
+        msg.linear.y = 0
+        msg.angular.z = 0
+        self.pub.publish(msg)
+        self.rate.sleep()
+        rospy.loginfo("Stop rUBot")
 
 if __name__ == '__main__':
     try:
-        main()
-        rospy.spin()
+        wall_follower = WallFollower()
+        wall_follower.run()
     except rospy.ROSInterruptException:
-        shutdown()
+        pass
