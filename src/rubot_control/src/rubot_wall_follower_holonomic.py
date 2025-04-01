@@ -25,6 +25,7 @@ class WallFollower:
 
         self.shutting_down = False
         self.regions = None
+        self.msg = None
 
     def get_distance(self, msg, minAngle, maxAngle):
         minAngle = int(minAngle * self.scanRangesLengthCorrectionFactor)
@@ -32,29 +33,33 @@ class WallFollower:
         return min(min(msg.ranges[minAngle:maxAngle]), 3)
 
     def scan_callback(self, msg):
-        if self.shutting_down:
+        self.msg = msg
+
+    def set_regions(self):
+        if self.shutting_down or self.msg is None:
             return
 
         if not self.isScanRangesLengthCorrectionFactorCalculated:
-            self.scanRangesLengthCorrectionFactor = len(msg.ranges) / 360
+            self.scanRangesLengthCorrectionFactor = len(self.msg.ranges) / 360
             self.isScanRangesLengthCorrectionFactorCalculated = True
 
         self.regions = {
-            'rback': self.get_distance(msg, 0, 30),
-            'bright': self.get_distance(msg, 30, 90),
-            'right': self.get_distance(msg, 90, 120),
-            'fright': self.get_distance(msg, 120, 170),
-            'front': self.get_distance(msg, 170, 190),
-            'fleft': self.get_distance(msg, 190, 240),
-            'left': self.get_distance(msg, 240, 270),
-            'bleft': self.get_distance(msg, 270, 330),
-            'lback': self.get_distance(msg, 330, 360),
+            'rback': self.get_distance(self.msg, 0, 30),
+            'bright': self.get_distance(self.msg, 30, 90),
+            'right': self.get_distance(self.msg, 90, 120),
+            'fright': self.get_distance(self.msg, 120, 170),
+            'front': self.get_distance(self.msg, 170, 190),
+            'fleft': self.get_distance(self.msg, 190, 240),
+            'left': self.get_distance(self.msg, 240, 270),
+            'bleft': self.get_distance(self.msg, 270, 330),
+            'lback': self.get_distance(self.msg, 330, 360),
         }
 
         self.regions["back"] = min(self.regions["rback"], self.regions["lback"])
 
     def run(self):
         while not rospy.is_shutdown():
+            self.set_regions()
             if self.regions:
                 self.take_action(self.regions)
 
