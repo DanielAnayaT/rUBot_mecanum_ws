@@ -33,7 +33,7 @@
     <param name="laser_z_short"             value="0.05"/>   <!-- Weight for short-range sensor noise -->
     <param name="laser_z_max"               value="0.05"/>   <!-- Weight for max-range sensor noise -->
     <param name="laser_z_rand"              value="0.2"/>    <!-- Weight for random noise in laser data -->
-    <param name="laser_sigma_hit"           value="0.15"/>   <!-- Standard deviation of sensor noise -->
+    <param name="laser_srosrun map_server map_saver -f test_mapigma_hit"           value="0.15"/>   <!-- Standard deviation of sensor noise -->
     <param name="laser_lambda_short"        value="0.1"/>    <!-- Exponential decay rate for short-range noise -->
     <param name="laser_likelihood_max_dist" value="2.0"/>    <!-- Max distance for likelihood field model -->
     <param name="laser_model_type"          value="likelihood_field"/> <!-- Type of laser model (likelihood field works best) -->
