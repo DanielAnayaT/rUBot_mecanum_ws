@@ -1,5 +1,7 @@
 <launch>
-    <node pkg="rubot_projects" type="keras_takePictures_detect_signs_move2.py" name="keras_takePictures_detect_signs_move" output="screen">
-        <param name="image_topic" value="/usb_cam/image_raw"/>
-    </node>
+    <!-- Nodo 1: Detección de señales -->
+    <node pkg="rubot_projects" type="keras_takePictures_detect_signs.py" name="keras_takePictures_detect_signs" output="screen" />
+
+    <!-- Nodo 2: Acción según la clase predicha -->
+    <node pkg="rubot_projects" type="keras_make_move_action.py" name="keras_make_move_action" output="screen" />
 </launch>
