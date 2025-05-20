@@ -17,8 +17,8 @@ class MoveDecisionNode:
         self.current_class = None
         self.robot_x = 0.0
         self.robot_y = 0.0
-        self.signal_x = None
-        self.signal_y = None
+        self.signal_x = 0.28
+        self.signal_y = 0.36
         self.detection_time = None
         self.detection_distance_threshold = 0.3  # metros
         self.detection_timeout = 10.0  # segundos
@@ -27,8 +27,8 @@ class MoveDecisionNode:
 
     def class_callback(self, msg):
         self.current_class = msg.data
-        self.signal_x = self.robot_x + 0.5  # asumimos señal 0.5m delante
-        self.signal_y = self.robot_y
+        #self.signal_x = self.robot_x + 0.5  # asumimos señal 0.5m delante
+        #self.signal_y = self.robot_y
         self.detection_time = time.time()
         rospy.loginfo(f"Clase recibida: {self.current_class}")
 
